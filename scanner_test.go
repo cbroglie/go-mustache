@@ -115,3 +115,14 @@ func second(v []string) string {
 	}
 	return v[1]
 }
+
+func TestStartOfLine(t *testing.T) {
+	scanner := &stringScanner{input: "test\ntest\n"}
+	assert.True(t, scanner.StartOfLine())
+	scanner.Scan(regexp.MustCompile(`te`))
+	assert.False(t, scanner.StartOfLine())
+	scanner.Scan(regexp.MustCompile(`st\n`))
+	assert.True(t, scanner.StartOfLine())
+	scanner.Scan(regexp.MustCompile(`te`))
+	assert.False(t, scanner.StartOfLine())
+}

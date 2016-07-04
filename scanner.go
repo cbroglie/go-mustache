@@ -17,6 +17,19 @@ type stringScanner struct {
 // It returns a slice containing the match and any other matched subgroups. If
 // there is no match, nil is returned.
 func (s *stringScanner) Scan(re *regexp.Regexp) []string {
+	matches := s.Check(re)
+	if matches == nil {
+		return nil
+	}
+	s.pos += len(matches[0])
+	return matches
+}
+
+// Check tries to match the pattern at the current position without advancing
+// the scan pointer.
+// It returns a slice containing the match and any other matched subgroups. If
+// there is no match, nil is returned.
+func (s *stringScanner) Check(re *regexp.Regexp) []string {
 	loc := re.FindStringSubmatchIndex(s.input[s.pos:])
 	if loc == nil {
 		return nil
@@ -32,7 +45,6 @@ func (s *stringScanner) Scan(re *regexp.Regexp) []string {
 			matches[i] = s.input[s.pos+start : s.pos+stop]
 		}
 	}
-	s.pos += loc[1]
 	return matches
 }
 
@@ -99,10 +111,24 @@ func (s *stringScanner) Len() int {
 // Substring returns the substring of the input string for the given range.
 func (s *stringScanner) Substring(start, end int) (string, error) {
 	if start < 0 || start >= len(s.input) {
-		return "", fmt.Errorf("start index %d is outside the allowed range of [0, %d]", start, len(s.input))
+		return "", fmt.Errorf("start index %d is outside the allowed range of [0, %d)", start, len(s.input))
 	}
-	if end < 0 || end >= len(s.input) {
+	if end < 0 || end > len(s.input) {
 		return "", fmt.Errorf("end index %d is outside the allowed range of [0, %d]", end, len(s.input))
 	}
+	if start >= end {
+		return "", fmt.Errorf("start index %d is >= end index %d", start, end)
+	}
 	return s.input[start:end], nil
+}
+
+// StartOfLine returns true if the pointer is at the beginning of a line.
+func (s *stringScanner) StartOfLine() bool {
+	if s.pos == 0 {
+		return true
+	}
+	if s.input[s.pos-1] == '\n' {
+		return true
+	}
+	return false
 }
