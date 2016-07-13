@@ -7,19 +7,19 @@ get-deps:
 
 .PHONY: test
 test:
-	go test -cover ./...
+	go test -cover $(go list ./... | grep -v /vendor/)
 
 .PHONY: fmt
 fmt:
-	go fmt ./...
+	go fmt $(go list ./... | grep -v /vendor/)
 
 .PHONY: vet
 vet:
-	go vet ./...
+	go vet $(go list ./... | grep -v /vendor/)
 
 .PHONY: lint
 lint:
-	golint ./...
+	golint $(go list ./... | grep -v /vendor/)
 
 .PHONY: ci
 ci: fmt vet test
