@@ -17,7 +17,8 @@ const (
 	Variable
 	UnescapedVariable
 	Partial
-	comment // not exported as comment tags are not part of the final parse tree
+	comment      // not exported as comment tags are not part of the final parse tree
+	closeSection // not exported as section close tags are not part of the final parse tree
 )
 
 // Token represents a mustache token.
@@ -69,12 +70,15 @@ type Template struct {
 var (
 	openTag        = regexp.MustCompile(`([ \t]*)?(\{\{)`)
 	notOpenTag     = regexp.MustCompile(`(?m)(^[ \t]*)?(\{\{)`)
-	tagType        = regexp.MustCompile(`(\!|\{)`)
+	tagType        = regexp.MustCompile(`(\!|\{|#|\/|\^)`)
 	allowedContent = regexp.MustCompile(`(\w|[?!\/.-])*`)
 	closeTag       = map[TokenType]*regexp.Regexp{
 		Variable:          regexp.MustCompile(`([ \t]*)?(\}\})`),
 		UnescapedVariable: regexp.MustCompile(`([ \t]*)?(\}\}\})`),
 		comment:           regexp.MustCompile(`([ \t]*)?(\!?\}\})`),
+		InvertedSection:   regexp.MustCompile(`([ \t]*)?(\}\})`),
+		Section:           regexp.MustCompile(`([ \t]*)?(\}\})`),
+		closeSection:      regexp.MustCompile(`([ \t]*)?(\}\})`),
 	}
 )
 
@@ -138,6 +142,12 @@ func (t *Template) parseTokenType() (TokenType, error) {
 		return comment, nil
 	case "{":
 		return UnescapedVariable, nil
+	case "#":
+		return Section, nil
+	case "^":
+		return InvertedSection, nil
+	case "/":
+		return closeSection, nil
 	default:
 		return 0, fmt.Errorf("Unexpected tag type %s", matches[0])
 	}
@@ -165,6 +175,28 @@ func (t *Template) addTokens(tokenType TokenType, content string) error {
 	switch tokenType {
 	case Variable, UnescapedVariable:
 		t.result.tokens = append(t.result.tokens, &variable{name: content, escape: tokenType == Variable})
+	case Section, InvertedSection:
+		// Sections work using a stack: each new section pushes the current
+		// result onto the stack, and new tags are added to the new section.
+		// When a closing tag is encountered, the previous section is popped
+		// back off the stack.
+		s := newSection()
+		s.name = content
+		s.inverted = tokenType == InvertedSection
+		t.result.tokens = append(t.result.tokens, s)
+		t.sections = append(t.sections, t.result)
+		t.result = s
+	case closeSection:
+		if len(t.sections) == 0 {
+			return fmt.Errorf("Closing unopened section %s", content)
+		}
+		if t.result.name != content {
+			return fmt.Errorf("Unclosed section %s", t.result.name)
+		}
+		n := len(t.sections)
+		s := t.sections[n-1]
+		t.result = s
+		t.sections = t.sections[0 : n-1]
 	}
 	return nil
 }
@@ -242,7 +274,7 @@ func skipWhitespace(tokenType TokenType) bool {
 	// be skipped if they are the first (and only) non-whitespace content on the
 	// line.
 	switch tokenType {
-	case Section, InvertedSection, comment:
+	case Section, InvertedSection, closeSection, comment:
 		return true
 	}
 	return true
@@ -278,7 +310,11 @@ func (t *Template) parseText() bool {
 	t.scanner.SetPos(t.scanner.Pos() - len(matches[1]))
 
 	// Add the text up to the match.
-	t.result.tokens = append(t.result.tokens, &text{value: matches[0][0 : len(matches[0])-len(matches[1])]})
+	txt := matches[0][0 : len(matches[0])-len(matches[1])]
+	if len(txt) > 0 {
+		t.result.tokens = append(t.result.tokens, &text{value: txt})
+	}
+
 	return true
 }
 
@@ -310,4 +346,19 @@ func (t *text) Name() string {
 
 func (t *text) Tokens() []Token {
 	panic("mustache: Tokens on Text type")
+}
+
+func (s *section) Type() TokenType {
+	if s.inverted {
+		return InvertedSection
+	}
+	return Section
+}
+
+func (s *section) Name() string {
+	return s.name
+}
+
+func (s *section) Tokens() []Token {
+	return s.tokens
 }

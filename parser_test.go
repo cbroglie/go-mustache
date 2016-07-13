@@ -145,3 +145,34 @@ func TestMultilineComment(t *testing.T) {
 	}
 	runTests(t, tests)
 }
+
+func TestSection(t *testing.T) {
+	tokens := []Token{
+		&section{
+			name:     "a",
+			inverted: false,
+			tokens: []Token{
+				&text{value: "Name: "},
+				&variable{name: "b", escape: true},
+				&text{value: "."},
+			},
+		},
+	}
+	tests := []parserTest{
+		{
+			template: "{{#a}}Name: {{b}}.{{/a}}",
+			tokens:   tokens,
+		},
+		{
+			template: "{{^c}}{{#a}}Name: {{b}}.{{/a}}{{/c}}",
+			tokens: []Token{
+				&section{
+					name:     "c",
+					inverted: true,
+					tokens:   tokens,
+				},
+			},
+		},
+	}
+	runTests(t, tests)
+}
