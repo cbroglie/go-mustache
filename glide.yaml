@@ -1,0 +1,5 @@
+package: github.com/cbroglie/go-mustache
+import:
+- package: github.com/stretchr/testify
+  subpackages:
+  - assert
