@@ -1,99 +1,147 @@
 package mustache
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestText(t *testing.T) {
-	tmpl, err := Compile("This is an example string")
-	if assert.NoError(t, err) {
-		if assert.Len(t, tmpl.result.tokens, 1) && assert.IsType(t, &text{}, tmpl.result.tokens[0]) {
-			assert.Equal(t, "This is an example string", tmpl.result.tokens[0].(*text).value)
+type parserTest struct {
+	template string
+	tokens   []Token
+}
+
+func runTests(t *testing.T, tests []parserTest) {
+	for _, test := range tests {
+		tmpl, err := Compile(test.template)
+		if assert.NoError(t, err, test.template) && assert.Len(t, tmpl.result.tokens, len(test.tokens)) {
+			for i := range test.tokens {
+				assert.Equal(t, test.tokens[i], tmpl.result.tokens[i], fmt.Sprintf("tokens at index %d are not equal", i))
+			}
 		}
 	}
+}
+
+func TestText(t *testing.T) {
+	tokens := []Token{
+		&text{value: "This is an example string"},
+	}
+	tests := []parserTest{
+		{
+			template: "This is an example string",
+			tokens:   tokens,
+		},
+	}
+	runTests(t, tests)
 }
 
 func TestVariable(t *testing.T) {
-	templates := []string{
-		"Welcome to {{ place }}!",
-		"Welcome to {{ place}}!",
-		"Welcome to {{{ place }}}!",
-		"Welcome to {{{place }}}!",
+	escapedTokens := []Token{
+		&text{value: "Welcome to "},
+		&variable{name: "place", escape: true},
+		&text{value: "!"},
 	}
-	for _, template := range templates {
-		tmpl, err := Compile(template)
-		if assert.NoError(t, err, template) && assert.Len(t, tmpl.result.tokens, 3, template) {
-			if assert.IsType(t, &text{}, tmpl.result.tokens[0]) {
-				assert.Equal(t, "Welcome to ", tmpl.result.tokens[0].(*text).value)
-			}
-			if assert.IsType(t, &variable{}, tmpl.result.tokens[1]) {
-				assert.Equal(t, "place", tmpl.result.tokens[1].(*variable).name)
-			}
-			if assert.IsType(t, &text{}, tmpl.result.tokens[2]) {
-				assert.Equal(t, "!", tmpl.result.tokens[2].(*text).value)
-			}
-		}
+	unescapedTokens := []Token{
+		&text{value: "Welcome to "},
+		&variable{name: "place", escape: false},
+		&text{value: "!"},
 	}
+	tests := []parserTest{
+		{
+			template: "Welcome to {{ place }}!",
+			tokens:   escapedTokens,
+		},
+		{
+			template: "Welcome to {{ place}}!",
+			tokens:   escapedTokens,
+		},
+		{
+			template: "Welcome to {{{ place }}}!",
+			tokens:   unescapedTokens,
+		},
+		{
+			template: "Welcome to {{{place }}}!",
+			tokens:   unescapedTokens,
+		},
+	}
+	runTests(t, tests)
 }
 
 func TestComment(t *testing.T) {
-	templates := []string{
-		"12{{! comment }}34",
-		"12{{!comment }}34",
-		"12{{! comment}}34",
-		"12{{!comment}}34",
-		"12{{! comment !}}34",
-		"12{{!comment !}}34",
-		"12{{! comment!}}34",
-		"12{{!comment!}}34",
+	tokens := []Token{
+		&text{value: "12"},
+		&text{value: "34"},
 	}
-	for _, template := range templates {
-		tmpl, err := Compile(template)
-		if assert.NoError(t, err, template) && assert.Len(t, tmpl.result.tokens, 2, template) {
-			if assert.IsType(t, &text{}, tmpl.result.tokens[0]) {
-				assert.Equal(t, "12", tmpl.result.tokens[0].(*text).value)
-			}
-			if assert.IsType(t, &text{}, tmpl.result.tokens[1]) {
-				assert.Equal(t, "34", tmpl.result.tokens[1].(*text).value)
-			}
-		}
+	tests := []parserTest{
+		{
+			template: "12{{! comment }}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{!comment }}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{! comment}}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{!comment}}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{! comment !}}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{!comment !}}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{! comment!}}34",
+			tokens:   tokens,
+		},
+		{
+			template: "12{{!comment!}}34",
+			tokens:   tokens,
+		},
 	}
+	runTests(t, tests)
 }
 
 func TestStandaloneComment(t *testing.T) {
-	templates := []string{
-		"12\n{{! comment }}\n34",
+	tokens := []Token{
+		&text{value: "12\n"},
+		&text{value: "34"},
 	}
-	for _, template := range templates {
-		tmpl, err := Compile(template)
-		if assert.NoError(t, err, template) && assert.Len(t, tmpl.result.tokens, 2, template) {
-			if assert.IsType(t, &text{}, tmpl.result.tokens[0]) {
-				assert.Equal(t, "12\n", tmpl.result.tokens[0].(*text).value)
-			}
-			if assert.IsType(t, &text{}, tmpl.result.tokens[1]) {
-				assert.Equal(t, "34", tmpl.result.tokens[1].(*text).value)
-			}
-		}
+	tests := []parserTest{
+		{
+			template: "12\n{{! comment }}\n34",
+			tokens:   tokens,
+		},
 	}
+	runTests(t, tests)
 }
 
 func TestMultilineComment(t *testing.T) {
-	templates := []string{
-		"Begin.\n{{!\nSomething's going on here...\n}}\nEnd.",
-		"Begin.\n{{! Something's going on here... }}\nEnd.",
-		"Begin.\n  {{!\n    Something's going on here...\n  }}\nEnd.",
+	tokens := []Token{
+		&text{value: "Begin.\n"},
+		&text{value: "End."},
 	}
-	for _, template := range templates {
-		tmpl, err := Compile(template)
-		if assert.NoError(t, err, template) && assert.Len(t, tmpl.result.tokens, 2, template) {
-			if assert.IsType(t, &text{}, tmpl.result.tokens[0]) {
-				assert.Equal(t, "Begin.\n", tmpl.result.tokens[0].(*text).value)
-			}
-			if assert.IsType(t, &text{}, tmpl.result.tokens[1]) {
-				assert.Equal(t, "End.", tmpl.result.tokens[1].(*text).value)
-			}
-		}
+	tests := []parserTest{
+		{
+			template: "Begin.\n{{!\nSomething's going on here...\n}}\nEnd.",
+			tokens:   tokens,
+		},
+		{
+			template: "Begin.\n{{! Something's going on here... }}\nEnd.",
+			tokens:   tokens,
+		},
+		{
+			template: "Begin.\n  {{!\n    Something's going on here...\n  }}\nEnd.",
+			tokens:   tokens,
+		},
 	}
+	runTests(t, tests)
 }
