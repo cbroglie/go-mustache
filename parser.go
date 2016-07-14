@@ -5,39 +5,6 @@ import (
 	"regexp"
 )
 
-// TokenType represents the different tokens the parser extracts from a string
-// Template.
-type TokenType uint
-
-// Defines for the possible TokenType values.
-const (
-	Text TokenType = iota
-	Section
-	InvertedSection
-	Variable
-	UnescapedVariable
-	Partial
-	comment      // not exported as comment tags are not part of the final parse tree
-	closeSection // not exported as section close tags are not part of the final parse tree
-)
-
-// Token represents a mustache token.
-//
-// Not all methods apply to all kinds of tokens. Restrictions, if any, are noted
-// in the documentation for each method. Use the Type method to find out the
-// type of token before calling type-specific methods. Calling a method
-// inappropriate to the type of token causes a run time panic.
-type Token interface {
-	// Type returns the type of the token.
-	Type() TokenType
-	// Name returns the name of the token. It panics for token types which are
-	// not named (i.e. text tokens).
-	Name() string
-	// Tokens returns any child tokens. It panics for token types which cannot
-	// contain child tokens (i.e. text and variable tokens).
-	Tokens() []Token
-}
-
 type text struct {
 	value string
 }
@@ -58,15 +25,6 @@ type partial struct {
 	value *section
 }
 
-// Template represents a compiled mustache Template. Its methods are safe for
-// concurrent use.
-type Template struct {
-	result   *section
-	sections []*section
-	scanner  *stringScanner
-	error    error
-}
-
 var (
 	openTag        = regexp.MustCompile(`([ \t]*)?(\{\{)`)
 	notOpenTag     = regexp.MustCompile(`(?m)(^[ \t]*)?(\{\{)`)
@@ -81,24 +39,6 @@ var (
 		closeSection:      regexp.MustCompile(`([ \t]*)?(\}\})`),
 	}
 )
-
-// Compile takes a string mustache Template and compiles it so that it can be
-// rendered.
-func Compile(contents string) (*Template, error) {
-	t := &Template{}
-	if err := t.parse(contents); err != nil {
-		return nil, err
-	}
-	return t, nil
-}
-
-func (t *Template) Render(context interface{}) (string, error) {
-	return "", nil
-}
-
-func (t *Template) Tokens() []Token {
-	return t.result.tokens
-}
 
 func newSection() *section {
 	return &section{
